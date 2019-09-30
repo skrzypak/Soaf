@@ -4,108 +4,109 @@ import subprocess
 import os
 
 
+# Read and save metadata from file
+def exiftool_metadata(path):
+    metadata = {}
+    exifToolPath = 'exifTool.exe'
+    ''' use Exif tool to get the metadata '''
+    process = subprocess.Popen(
+        [
+            exifToolPath,
+            path
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        universal_newlines=True
+    )
+    ''' get the tags in dict '''
+    for tag in process.stdout:
+        tag = tag.strip()
+        key = tag[:tag.find(':')].strip()
+        value = tag[tag.find(':') + 1:].strip()
+        metadata[key] = value
+    return metadata
+
+
 class File:
-    def __init__(self,
-                 path):
-        self.metadata = {}
-        exifToolPath = 'exifTool.exe'
-        ''' use Exif tool to get the metadata '''
-        process = subprocess.Popen(
-            [
-                exifToolPath,
-                path
-            ],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            universal_newlines=True
-        )
-        ''' get the tags in dict '''
-        for tag in process.stdout:
-            tag = tag.strip()
-            key = tag[:tag.find(':')].strip()
-            value = tag[tag.find(':') + 1:].strip()
-            self.metadata[key] = value
+    def __init__(self, path):
+        self.metadata = exiftool_metadata(path)
 
-    def _get_time(self):
-        if 'Date/Time Original' in self.metadata:
-            return self.metadata['Date/Time Original']
-        elif 'Create Date' in self.metadata:
-            return self.metadata['Create Date']
+    def _get_file_metadata(self, key, no=''):
+        if key in self.metadata:
+            return self.metadata[key]
         else:
-            return ''
+            return no
 
-    def _get_type(self):
-        if 'MIME Type' in self.metadata:
-            return self.metadata['MIME Type']
-        else:
-            return ''
+    def copyCore(self, source, dst_dir: str, copy_duplicate=False):
 
-    def _copyFile(self, dst: str):
+        logs = []
+        # if value of metadata not exists - folder name
+        no_metadata = 'none'
+        date = File._get_file_metadata(self, 'Date/Time Original')
+        if date == '':
+            date = File._get_file_metadata(self, 'Create Date', no_metadata)
 
-        date = File._get_time(self)
-        if not date:
-            return False
+        mime_type = File._get_file_metadata(self, 'MIME Type', no_metadata)
+        dst_dir += f'''/{mime_type[:mime_type.find('/')]}/{date[:4]}/{date[5:7]}'''
 
-        mime_type = File._get_type(self)
-        if not mime_type:
-            return False
-
-        dst += '/' + mime_type[:mime_type.find('/')] + '/' + date[:4] + '/' + date[5:7]
-
-        if not os.path.isdir(dst):
-            os.makedirs(dst)
-            print(f"Make dir {dst}")
-
-        filename = self.metadata['File Name']
-        dst_name = dst + '/' + filename
-        pth: str = self.metadata['Directory'] + '/' + filename
-        i = 0
+        filename = File._get_file_metadata(self, 'File Name')
         f_name = filename
+        dst = dst_dir + '/' + filename
 
-        while os.path.isfile(dst_name):
-            filename = f_name[:f_name.find('.')] + '_D' + str(i) + '.' + self.metadata['File Type Extension']
-            dst_name = dst + '/' + filename
-            i = i + 1
+        # File with the same name exists in dst. If source and dst have same size then determines 'copy_exists'
+        if os.path.isfile(dst):
+            i = 0
+            f_pth = File(dst)
+            if_same_size: bool = f_pth._get_file_metadata("File Size") == File._get_file_metadata(self, 'File Size')
+            if (not if_same_size) or copy_duplicate:
+                while os.path.isfile(dst):
+                    filename = f'''{f_name[:f_name.find('.')]}_D{str(i)}.{File._get_file_metadata(self, 'File Type Extension')}'''
+                    dst = f'''{dst_dir}/{filename}'''
+                    i = i + 1
+                if if_same_size:
+                    logs.append(f"Warning: file already exists but I must copy all files"
+                                f" [copy_duplicate={copy_duplicate}], so I try do it ...")
+                else:
+                    logs.append(f"Warning: file already exists but have other size, so I try copy it ...")
 
-        if i != 0:
-            print(f"Warning: {pth} -> {dst_name}")
-        shutil.copy(pth, dst_name)
-        print(f"{pth} -> {dst_name} Copy done ...")
-        return True
+            else:
+                logs.append(f"Warning: file already duplicate [copy_exists={copy_duplicate}]." 
+                            f"\nCopy aboard: {source} -> {dst}")
+                return logs
+
+        try:
+            if not os.path.isdir(dst_dir):
+                os.makedirs(dst_dir)
+                logs.append(f"New directory created: {dst_dir}")
+            shutil.copy(source, dst)
+            logs.append(f'''Copy done: {source} -> {dst}''')
+        except:
+            logs.append(f'''Copy error [check permissions]: {source} ->  {dst}''')
+
+        return logs
 
 
 def main():
-    root_dir = 'C:/Users/'
-    dst_dir = 'C:/Users/'
-    dst_none = dst_dir + '/none'
+    # Number of log
+    l_lpm = 0
+    # Number of file
+    f_lpm = 0
 
-    if not os.path.isdir(dst_none):
-        os.makedirs(dst_none)
-        print(f"Make dir {dst_none}")
+    # Setup variable
+    root_dir = 'C:/Users/Xboot/Desktop/'
+    dst_dir = 'C:/Users/Xboot/Desktop/'
+    copy_duplicate = False
 
-    for p in glob.glob(root_dir + '/**/*.*', recursive=True):
+    for source in glob.glob(root_dir + '/**/*.*', recursive=True):
+        f_lpm = f_lpm + 1
         try:
-            f = File(p)
-            if not f._copyFile(dst_dir):
-                # Exiftool { Error: No found file }
-                # Path for Windows
-                filename = p[p.rfind('\\'):]
-                f_name = filename
-                dst_none_name = dst_none + '/' + f_name
-                i = 0
-
-                while os.path.isfile(dst_none_name):
-                    filename = f_name[:f_name.rfind('.')] + '_D' + str(i) + f_name[f_name.rfind('.'):]
-                    dst_none_name = dst_none + '/' + filename
-                    i = i + 1
-
-                if i != 0:
-                    print(f"Warning: {p} -> {dst_none_name}")
-
-                shutil.copy(p, dst_none_name)
-                print(f"{p} -> {dst_none_name} Copy done ...")
+            f = File(source)
+            print("----------")
+            for log in f.copyCore(source, dst_dir, copy_duplicate):
+                l_lpm = l_lpm + 1
+                print(f'''{str(l_lpm)}.{f_lpm}) {log}''')
         except:
-            print(f'Copy error: {p}')
+            print(f'Copy error [exiftool or error in "copyCore" function]: {source}')
 
 
 if __name__ == '__main__':
