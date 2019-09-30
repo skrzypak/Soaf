@@ -2,6 +2,8 @@ import glob
 import shutil
 import subprocess
 import os
+import sys
+import argparse
 
 
 # Read and save metadata from file
@@ -87,24 +89,43 @@ class File:
 
 
 def main():
-    # Number of log
-    l_lpm = 0
-    # Number of file
-    f_lpm = 0
+    # Arguments from console
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-s', help="Obligatory: source directory path")
+    parser.add_argument('-d', help="Obligatory: destination folder path")
+    parser.add_argument('-e', help="Obligatory: copy duplicate files (T/True/F/False)")
+    args = parser.parse_args(sys.argv[1:])
 
     # Setup variable
-    root_dir = 'C:/Users/Xboot/Desktop/'
-    dst_dir = 'C:/Users/Xboot/Desktop/'
-    copy_duplicate = False
+    source_dir = args.s
+    dst_dir = args.d
+    df = {
+        "T": True,
+        "TRUE": True,
+        "F": False,
+        "FALSE": False
+    }
+    try:
+        copy_duplicate = df.get(args.e.upper(), False)
+    except AttributeError:
+        copy_duplicate = False
+        print(f"app.py: error: unrecognized arguments. Use -h or --help to see options")
+        exit(1)
 
-    for source in glob.glob(root_dir + '/**/*.*', recursive=True):
-        f_lpm = f_lpm + 1
+    # Number of log
+    l_lpm = 0
+
+    # source_dir = 'C:/Users'
+    # dst_dir = 'C:/Users'
+    # copy_duplicate = False
+
+    for f_inx, source in enumerate(glob.glob(source_dir + '/**/*.*', recursive=True)):
         try:
             f = File(source)
             print("----------")
             for log in f.copyCore(source, dst_dir, copy_duplicate):
                 l_lpm = l_lpm + 1
-                print(f'''{str(l_lpm)}.{f_lpm}) {log}''')
+                print(f'''{str(l_lpm)}.{f_inx + 1}) {log}''')
         except:
             print(f'Copy error [exiftool or error in "copyCore" function]: {source}')
 

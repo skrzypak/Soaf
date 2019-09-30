@@ -126,3 +126,6 @@ dmypy.json
 exiftool.exe
 exiftool.txt
 
+# DEBUG folder
+DEBUG/
+
