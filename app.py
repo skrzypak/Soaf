@@ -82,8 +82,8 @@ class File:
                 logs.append(f"New directory created: {dst_dir}")
             shutil.copy(source, dst)
             logs.append(f'''Copy done: {source} -> {dst}''')
-        except:
-            logs.append(f'''Copy error [check permissions]: {source} ->  {dst}''')
+        except Exception as e:
+            logs.append(f'''Copy error [{e}]: {source} ->  {dst}''')
 
         return logs
 
@@ -126,8 +126,8 @@ def main():
             for log in f.copyCore(source, dst_dir, copy_duplicate):
                 l_lpm = l_lpm + 1
                 print(f'''{str(l_lpm)}.{f_inx + 1}) {log}''')
-        except:
-            print(f'Copy error [exiftool or error in "copyCore" function]: {source}')
+        except Exception as e:
+            print(f'Copy error [{e}]: {source}')
 
 
 if __name__ == '__main__':
